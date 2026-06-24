@@ -1,0 +1,40 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# PyTorch Models
+*.pth
+*.pt
+*.ckpt
+
+# Logs
+logs/
+runs/
+tensorboard/
+
+# Results
+results/
+
+# Datasets
+datasets/LLVIP/
+datasets/FLIR/
+datasets/KITTI/
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+**/__pycache__/
+*.pyc

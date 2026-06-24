@@ -66,8 +66,20 @@ def test_dataset_pipeline(config):
         vis_dir = os.path.join(root_dir, 'visible')
         if not os.path.exists(ir_dir) or not os.path.exists(vis_dir):
             return 0
-        ir_files = {os.path.splitext(f)[0] for f in os.listdir(ir_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))}
-        vis_files = {os.path.splitext(f)[0] for f in os.listdir(vis_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))}
+        def discover_images(base_dir):
+            images = set()
+            for root, _, files in os.walk(base_dir):
+                for f in files:
+                    if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        full_path = os.path.join(root, f)
+                        rel_path = os.path.relpath(full_path, base_dir)
+                        rel_key = rel_path.replace('\\', '/')
+                        rel_key_no_ext = os.path.splitext(rel_key)[0]
+                        images.add(rel_key_no_ext)
+            return images
+
+        ir_files = discover_images(ir_dir)
+        vis_files = discover_images(vis_dir)
         return len(ir_files.intersection(vis_files))
 
     llvip_pairs = count_pairs(llvip_dir)

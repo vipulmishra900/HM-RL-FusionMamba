@@ -9,7 +9,7 @@ class PairedImageDataset(Dataset):
     A PyTorch Dataset for paired Infrared and Visible images.
     Supports directory structures of datasets like LLVIP, FLIR, and M3FD.
     """
-    def __init__(self, root_dir, resize_shape=(64, 64), convert_to_grayscale=True, is_train=True, val_split=0.2, seed=42):
+    def __init__(self, root_dir, resize_shape=(64, 64), convert_to_grayscale=True, is_train=True, val_split=0.2, seed=42, split=None):
         super().__init__()
         self.root_dir = root_dir
         self.resize_shape = resize_shape
@@ -27,12 +27,24 @@ class PairedImageDataset(Dataset):
             if not os.path.exists(self.vis_dir):
                 print(f"WARNING: Visible directory is missing: {self.vis_dir}")
         else:
-            # Gather valid image files
-            ir_files = {os.path.splitext(f)[0]: f for f in os.listdir(self.ir_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))}
-            vis_files = {os.path.splitext(f)[0]: f for f in os.listdir(self.vis_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))}
+            # Helper to discover images recursively
+            def discover_images(base_dir):
+                images = {}
+                for root, _, files in os.walk(base_dir):
+                    for f in files:
+                        if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            full_path = os.path.join(root, f)
+                            rel_path = os.path.relpath(full_path, base_dir)
+                            rel_key = rel_path.replace('\\', '/')
+                            rel_key_no_ext = os.path.splitext(rel_key)[0]
+                            images[rel_key_no_ext] = full_path
+                return images
+
+            ir_files = discover_images(self.ir_dir)
+            vis_files = discover_images(self.vis_dir)
             
             # Find common base names (keys) to form pairs
-            common_names = sorted(list(set(ir_files.keys()).intersection(vis_files.keys())))
+            common_keys = sorted(list(set(ir_files.keys()).intersection(vis_files.keys())))
             
             # Alignment diagnostics
             missing_in_vis = ir_files.keys() - vis_files.keys()
@@ -43,22 +55,47 @@ class PairedImageDataset(Dataset):
             if missing_in_ir:
                 print(f"WARNING: {len(missing_in_ir)} visible files are missing matching infrared files.")
             
-            print(f"Total matched pairs: {len(common_names)}")
+            print(f"Total matched pairs: {len(common_keys)}")
             
-            # Split into train/validation sets deterministically
-            import random
-            random.seed(seed)
-            random.shuffle(common_names)
+            # Check if there are structured train/test directories
+            structured_keys = [k for k in common_keys if k.startswith('train/') or k.startswith('test/')]
+            is_structured = len(structured_keys) > 0
             
-            split_idx = int(len(common_names) * (1 - val_split))
-            if self.is_train:
-                selected_names = common_names[:split_idx]
+            # Determine split to use
+            if split is None:
+                split = 'train' if is_train else 'test'
+            
+            if split not in ['train', 'test', 'combined']:
+                raise ValueError(f"Invalid split: {split}. Must be one of 'train', 'test', 'combined'")
+            
+            selected_keys = []
+            if is_structured:
+                # Pre-split structure
+                if split == 'train':
+                    selected_keys = [k for k in common_keys if k.startswith('train/')]
+                elif split == 'test':
+                    selected_keys = [k for k in common_keys if k.startswith('test/')]
+                elif split == 'combined':
+                    selected_keys = common_keys
             else:
-                selected_names = common_names[split_idx:]
-                
+                # Flat structure: perform deterministic partition
+                if split == 'combined':
+                    selected_keys = common_keys
+                else:
+                    import random
+                    shuffled_keys = list(common_keys)
+                    random.seed(seed)
+                    random.shuffle(shuffled_keys)
+                    
+                    split_idx = int(len(shuffled_keys) * (1 - val_split))
+                    if split == 'train':
+                        selected_keys = shuffled_keys[:split_idx]
+                    else:  # split == 'test' (validation split)
+                        selected_keys = shuffled_keys[split_idx:]
+                        
             self.image_pairs = [
-                (os.path.join(self.ir_dir, ir_files[name]), os.path.join(self.vis_dir, vis_files[name]))
-                for name in selected_names
+                (ir_files[k], vis_files[k])
+                for k in selected_keys
             ]
             
         # Define transform pipeline

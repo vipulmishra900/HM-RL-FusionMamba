@@ -59,8 +59,23 @@ def verify_and_print_stats(root_dir, dataset_name):
         print("Status: DIRECTORIES MISSING OR EMPTY")
         return 0
         
-    ir_files = {os.path.splitext(f)[0] for f in os.listdir(ir_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))}
-    vis_files = {os.path.splitext(f)[0] for f in os.listdir(vis_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))}
+    def discover_images(base_dir):
+        images = {}
+        for root, _, files in os.walk(base_dir):
+            for f in files:
+                if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    full_path = os.path.join(root, f)
+                    rel_path = os.path.relpath(full_path, base_dir)
+                    rel_key = rel_path.replace('\\', '/')
+                    rel_key_no_ext = os.path.splitext(rel_key)[0]
+                    images[rel_key_no_ext] = full_path
+        return images
+
+    ir_files_dict = discover_images(ir_dir)
+    vis_files_dict = discover_images(vis_dir)
+    
+    ir_files = set(ir_files_dict.keys())
+    vis_files = set(vis_files_dict.keys())
     
     common_names = ir_files.intersection(vis_files)
     missing_in_vis = ir_files - vis_files

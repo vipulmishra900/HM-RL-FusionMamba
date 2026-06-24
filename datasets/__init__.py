@@ -1,3 +1,7 @@
-from .custom_dataset import MultiModalDataset
+from .custom_dataset import PairedImageDataset
+from .rl_dataset_adapter import RLDatasetAdapter
 
-__all__ = ["MultiModalDataset"]
+# Alias for backward/forward compatibility if referenced elsewhere
+MultiModalDataset = PairedImageDataset
+
+__all__ = ["PairedImageDataset", "MultiModalDataset", "RLDatasetAdapter"]

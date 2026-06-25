@@ -53,6 +53,10 @@ class Trainer:
         llvip_dir = os.path.join(base_dir, 'datasets', 'LLVIP')
         resize_shape = config.encoder.visual_input_shape[1:]  # (Height, Width)
         
+        # Ensure results directories exist
+        os.makedirs(config.training.checkpoint_dir, exist_ok=True)
+        os.makedirs(config.training.log_dir, exist_ok=True)
+        
         self.dataset = PairedImageDataset(
             root_dir=llvip_dir,
             resize_shape=resize_shape,
@@ -67,8 +71,29 @@ class Trainer:
             num_workers=0
         )
         
+        # Integrate validation dataset (LLVIP test split)
+        self.val_dataset = PairedImageDataset(
+            root_dir=llvip_dir,
+            resize_shape=resize_shape,
+            convert_to_grayscale=True,
+            is_train=False,
+            split='test'
+        )
+        self.val_dataloader = DataLoader(
+            self.val_dataset,
+            batch_size=config.agent.mini_batch_size,
+            shuffle=False,
+            num_workers=0
+        )
+        
         # 5. Create Adam optimizer for FusionMamba parameters
         self.optimizer = optim.Adam(self.fusion_mamba.parameters(), lr=1e-4)
+        
+        # 6. Checkpoint initialization
+        self.start_epoch = 1
+        self.best_val_loss = float('inf')
+        if hasattr(self.config.training, 'checkpoint_path') and self.config.training.checkpoint_path is not None:
+            self.load_checkpoint(self.config.training.checkpoint_path)
 
     def ssim_loss(self, img1, img2, window_size=11):
         import torch.nn.functional as F
@@ -103,6 +128,64 @@ class Trainer:
         advantages_list = []
         return states_list, actions_list, log_probs_list, returns_list, advantages_list
 
+    def save_checkpoint(self, epoch, path):
+        """
+        Saves a training checkpoint including model state, optimizer state, epoch, and best_val_loss.
+        """
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': self.fusion_mamba.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'best_val_loss': self.best_val_loss
+        }
+        torch.save(checkpoint, path)
+        print(f"Checkpoint saved successfully to {path}")
+
+    def load_checkpoint(self, path):
+        """
+        Loads a training checkpoint and restores model state, optimizer state, start_epoch, and best_val_loss.
+        """
+        if not os.path.exists(path):
+            print(f"WARNING: Checkpoint file not found at {path}. Starting from scratch.")
+            return
+        
+        checkpoint = torch.load(path, map_location=self.device)
+        self.fusion_mamba.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.start_epoch = checkpoint['epoch'] + 1
+        self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
+        print(f"Resumed training from checkpoint: {path} (restored starting epoch to {self.start_epoch})")
+
+    def validate(self):
+        """
+        Runs one validation epoch on LLVIP test split and prints/returns average loss.
+        """
+        print("Starting validation loop...")
+        self.fusion_mamba.eval()
+        total_val_loss = 0.0
+        
+        with torch.no_grad():
+            for iteration, batch in enumerate(self.val_dataloader, 1):
+                ir = batch["ir"].to(self.device)
+                vis = batch["vis"].to(self.device)
+                
+                fused = self.fusion_mamba(ir, vis)
+                
+                # Calculate L1 loss
+                loss_l1 = (torch.mean(torch.abs(fused - ir)) + torch.mean(torch.abs(fused - vis))) / 2.0
+                
+                # Calculate SSIM loss
+                loss_ssim = (self.ssim_loss(fused, ir) + self.ssim_loss(fused, vis)) / 2.0
+                
+                # Total loss
+                loss = 0.8 * loss_l1 + 0.2 * loss_ssim
+                total_val_loss += loss.item()
+        
+        avg_val_loss = total_val_loss / len(self.val_dataloader)
+        print(f"Validation Loss: {avg_val_loss:.6f}")
+        self.fusion_mamba.train()
+        return avg_val_loss
+
     def train(self):
         """
         Executes supervised training iterations for FusionMamba.
@@ -110,9 +193,11 @@ class Trainer:
         print("Starting supervised FusionMamba training pipeline...")
         self.fusion_mamba.train()
         
-        epochs = 1
+        total_epochs = 5
         
-        for epoch in range(1, epochs + 1):
+        for epoch in range(self.start_epoch, total_epochs + 1):
+            total_train_loss = 0.0
+            
             for iteration, batch in enumerate(self.dataloader, 1):
                 ir = batch["ir"].to(self.device)
                 vis = batch["vis"].to(self.device)
@@ -134,7 +219,27 @@ class Trainer:
                 loss.backward()
                 self.optimizer.step()
                 
+                total_train_loss += loss.item()
+                
                 # Print epoch, iteration, and loss
                 print(f"Epoch: {epoch} | Iteration: {iteration}/{len(self.dataloader)} | Loss: {loss.item():.6f}")
+            
+            avg_train_loss = total_train_loss / len(self.dataloader)
+            print(f"Epoch {epoch} Training Completed. Average Train Loss: {avg_train_loss:.6f}")
+            
+            # Run validation pass at the end of the epoch
+            val_loss = self.validate()
+            print(f"Epoch {epoch} Summary | Train Loss: {avg_train_loss:.6f} | Val Loss: {val_loss:.6f}")
+            
+            # Save best model
+            if val_loss < self.best_val_loss:
+                self.best_val_loss = val_loss
+                best_path = os.path.join(self.config.training.checkpoint_dir, "best_model.pth")
+                self.save_checkpoint(epoch, best_path)
+                print(f"New best model found at epoch {epoch} with validation loss {val_loss:.6f}!")
+            
+            # Save periodic/latest checkpoint
+            latest_path = os.path.join(self.config.training.checkpoint_dir, "latest_checkpoint.pth")
+            self.save_checkpoint(epoch, latest_path)
                     
         print("Supervised training loop completed successfully!")

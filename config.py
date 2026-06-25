@@ -58,6 +58,8 @@ class TrainingConfig:
     save_interval: int = 10                 # Save model every N training iterations
     eval_interval: int = 5                  # Evaluate model every N training iterations
     device: str = "cuda"                    # "cuda" or "cpu"
+    checkpoint_path: str = None
+
 
 @dataclass
 class HMRLFusionMambaConfig:

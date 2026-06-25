@@ -180,6 +180,8 @@ def main():
     print("=" * 60)
     
     if args.mode == "train":
+        if args.checkpoint is not None:
+            config.training.checkpoint_path = args.checkpoint
         trainer = Trainer(config)
         trainer.train()
         

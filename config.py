@@ -70,6 +70,7 @@ class TrainingConfig:
     batch_size: int = 64                    # Batch size for supervised DataLoader
     lr: float = 1e-4                        # Learning rate for FusionMamba optimizer
     max_iterations: int = None              # Maximum training iterations (None = full training)
+    auto_resume: bool = True                # Auto-resume from latest checkpoint if available
 
 
 @dataclass

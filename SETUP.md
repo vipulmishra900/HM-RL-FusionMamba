@@ -33,9 +33,9 @@ To build a CPU-compatible development environment, run the CPU setup script in P
 ./setup_cpu.ps1
 ```
 This script will:
-1. Create the `hm-rl-fusionmamba` Conda environment using [environment.yml](file:///c:/Users/Student/Desktop/HM-RL_FusionMamba/environment.yml) (Python 3.10.11).
+1. Create the `hm-rl-fusionmamba` Conda environment using [environment.yml](environment.yml) (Python 3.10.11).
 2. Install the PyTorch CPU-only distribution wheel.
-3. Install all core libraries listed in [requirements.txt](file:///c:/Users/Student/Desktop/HM-RL_FusionMamba/requirements.txt).
+3. Install all core libraries listed in [requirements.txt](requirements.txt).
 4. Run validation checks.
 
 ### Option B: Install for GPU Execution (NVIDIA / CUDA Support)
@@ -44,9 +44,9 @@ To build a GPU-accelerated environment with CUDA support, run the GPU setup scri
 ./setup_gpu.ps1
 ```
 This script will:
-1. Create the `hm-rl-fusionmamba` Conda environment using [environment.yml](file:///c:/Users/Student/Desktop/HM-RL_FusionMamba/environment.yml) (Python 3.10.11).
+1. Create the `hm-rl-fusionmamba` Conda environment using [environment.yml](environment.yml) (Python 3.10.11).
 2. Install PyTorch with CUDA 12.1 GPU support.
-3. Install all core libraries listed in [requirements.txt](file:///c:/Users/Student/Desktop/HM-RL_FusionMamba/requirements.txt).
+3. Install all core libraries listed in [requirements.txt](requirements.txt).
 4. Run validation checks.
 
 ---

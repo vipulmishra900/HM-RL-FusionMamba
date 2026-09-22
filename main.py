@@ -36,6 +36,30 @@ def parse_args():
         default=None, 
         help="Random seed for reproducibility"
     )
+    parser.add_argument(
+        "--dataset-dir", 
+        type=str, 
+        default=None, 
+        help="Path to dataset directory (e.g. /kaggle/input/llvip/LLVIP)"
+    )
+    parser.add_argument(
+        "--epochs", 
+        type=int, 
+        default=None, 
+        help="Number of training epochs (overrides config)"
+    )
+    parser.add_argument(
+        "--batch-size", 
+        type=int, 
+        default=None, 
+        help="DataLoader batch size (overrides config)"
+    )
+    parser.add_argument(
+        "--lr", 
+        type=float, 
+        default=None, 
+        help="Learning rate for FusionMamba optimizer"
+    )
     
     return parser.parse_args()
 
@@ -53,7 +77,12 @@ def test_dataset_pipeline(config):
     from verify_dataset import generate_dummy_images, delete_dummy_images
 
     base_path = os.path.dirname(os.path.abspath(__file__))
-    llvip_dir = os.path.join(base_path, 'datasets', 'LLVIP')
+    if hasattr(config.training, 'dataset_dir') and config.training.dataset_dir:
+        llvip_dir = config.training.dataset_dir
+    elif os.environ.get("DATASET_DIR"):
+        llvip_dir = os.environ.get("DATASET_DIR")
+    else:
+        llvip_dir = os.path.join(base_path, 'datasets', 'LLVIP')
     flir_dir = os.path.join(base_path, 'datasets', 'FLIR')
 
     # Read image size dynamically from config
@@ -168,6 +197,14 @@ def main():
         config.training.device = args.device
     if args.seed is not None:
         config.training.seed = args.seed
+    if args.dataset_dir is not None:
+        config.training.dataset_dir = args.dataset_dir
+    if args.epochs is not None:
+        config.training.epochs = args.epochs
+    if args.batch_size is not None:
+        config.training.batch_size = args.batch_size
+    if args.lr is not None:
+        config.training.lr = args.lr
         
     # Check device availability
     if config.training.device == "cuda" and not torch.cuda.is_available():

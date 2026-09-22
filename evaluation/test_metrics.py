@@ -1,15 +1,26 @@
 import os
 import cv2
 import numpy as np
-from metrics import (
-    entropy_metric,
-    spatial_frequency,
-    standard_deviation_metric,
-    average_gradient,
-    mutual_information_metric,
-    vif_metric,
-    qabf_metric
-)
+try:
+    from evaluation.metrics import (
+        entropy_metric,
+        spatial_frequency,
+        standard_deviation_metric,
+        average_gradient,
+        mutual_information_metric,
+        vif_metric,
+        qabf_metric
+    )
+except ImportError:
+    from metrics import (
+        entropy_metric,
+        spatial_frequency,
+        standard_deviation_metric,
+        average_gradient,
+        mutual_information_metric,
+        vif_metric,
+        qabf_metric
+    )
 
 def main():
     # Construct absolute paths relative to this script's directory

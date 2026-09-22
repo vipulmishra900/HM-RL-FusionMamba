@@ -44,7 +44,7 @@ class PPOAlgorithm:
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         
         for _ in range(self.config.ppo_epochs):
-            permutation = torch.randperm(num_samples)
+            permutation = torch.randperm(num_samples, device=states.device)
             
             for start_idx in range(0, num_samples, self.config.mini_batch_size):
                 batch_indices = permutation[start_idx : start_idx + self.config.mini_batch_size]

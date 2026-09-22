@@ -48,10 +48,17 @@ class Trainer:
         self.controller = AdaptiveController(config)
         self.reward_shaper = MultiModalRewardShaper()
         
-        # 4. Integrate PairedImageDataset with LLVIP
+        # 4. Integrate PairedImageDataset with LLVIP (configurable path)
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        llvip_dir = os.path.join(base_dir, 'datasets', 'LLVIP')
+        if hasattr(config.training, 'dataset_dir') and config.training.dataset_dir:
+            llvip_dir = config.training.dataset_dir
+        elif os.environ.get("DATASET_DIR"):
+            llvip_dir = os.environ.get("DATASET_DIR")
+        else:
+            llvip_dir = os.path.join(base_dir, 'datasets', 'LLVIP')
+
         resize_shape = config.encoder.visual_input_shape[1:]  # (Height, Width)
+        batch_size = getattr(config.training, 'batch_size', config.agent.mini_batch_size)
         
         # Ensure results directories exist
         os.makedirs(config.training.checkpoint_dir, exist_ok=True)
@@ -64,10 +71,14 @@ class Trainer:
             is_train=True,
             split='train'
         )
+        if len(self.dataset) == 0:
+            print(f"WARNING: No image pairs found in '{llvip_dir}'.")
+            print("Please ensure LLVIP is downloaded or provide --dataset-dir <path>.")
+            
         self.dataloader = DataLoader(
             self.dataset,
-            batch_size=config.agent.mini_batch_size,
-            shuffle=True,
+            batch_size=batch_size,
+            shuffle=(len(self.dataset) > 0),
             num_workers=0
         )
         
@@ -81,13 +92,14 @@ class Trainer:
         )
         self.val_dataloader = DataLoader(
             self.val_dataset,
-            batch_size=config.agent.mini_batch_size,
+            batch_size=batch_size,
             shuffle=False,
             num_workers=0
         )
         
         # 5. Create Adam optimizer for FusionMamba parameters
-        self.optimizer = optim.Adam(self.fusion_mamba.parameters(), lr=1e-4)
+        lr = getattr(config.training, 'lr', 1e-4)
+        self.optimizer = optim.Adam(self.fusion_mamba.parameters(), lr=lr)
         
         # 6. Checkpoint initialization
         self.start_epoch = 1
@@ -107,8 +119,8 @@ class Trainer:
         mu2_sq = mu2 * mu2
         mu1_mu2 = mu1 * mu2
         
-        sigma1_sq = F.avg_pool2d(img1 * img1, window_size, stride=1, padding=window_size//2) - mu1_sq
-        sigma2_sq = F.avg_pool2d(img2 * img2, window_size, stride=1, padding=window_size//2) - mu2_sq
+        sigma1_sq = torch.clamp(F.avg_pool2d(img1 * img1, window_size, stride=1, padding=window_size//2) - mu1_sq, min=0.0)
+        sigma2_sq = torch.clamp(F.avg_pool2d(img2 * img2, window_size, stride=1, padding=window_size//2) - mu2_sq, min=0.0)
         sigma12 = F.avg_pool2d(img1 * img2, window_size, stride=1, padding=window_size//2) - mu1_mu2
         
         num = (2.0 * mu1_mu2 + C1) * (2.0 * sigma12 + C2)
@@ -160,6 +172,10 @@ class Trainer:
         """
         Runs one validation epoch on LLVIP test split and prints/returns average loss.
         """
+        if len(self.val_dataloader) == 0:
+            print("Validation DataLoader is empty. Skipping validation pass.")
+            return float('nan')
+
         print("Starting validation loop...")
         self.fusion_mamba.eval()
         total_val_loss = 0.0
@@ -190,10 +206,16 @@ class Trainer:
         """
         Executes supervised training iterations for FusionMamba.
         """
+        if len(self.dataloader) == 0:
+            raise RuntimeError(
+                f"Training DataLoader is empty. No image pairs found in '{self.dataset.root_dir}'. "
+                "Please verify the dataset path and ensure paired Infrared and Visible images are present."
+            )
+
         print("Starting supervised FusionMamba training pipeline...")
         self.fusion_mamba.train()
         
-        total_epochs = 5
+        total_epochs = getattr(self.config.training, 'epochs', 5)
         
         for epoch in range(self.start_epoch, total_epochs + 1):
             total_train_loss = 0.0
@@ -232,7 +254,7 @@ class Trainer:
             print(f"Epoch {epoch} Summary | Train Loss: {avg_train_loss:.6f} | Val Loss: {val_loss:.6f}")
             
             # Save best model
-            if val_loss < self.best_val_loss:
+            if not np.isnan(val_loss) and val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
                 best_path = os.path.join(self.config.training.checkpoint_dir, "best_model.pth")
                 self.save_checkpoint(epoch, best_path)

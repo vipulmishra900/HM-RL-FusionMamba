@@ -1,4 +1,5 @@
 import os
+import torch
 from dataclasses import dataclass, field
 from typing import List, Tuple
 
@@ -13,6 +14,11 @@ class EncoderConfig:
 @dataclass
 class FusionMambaConfig:
     """Configuration for the FusionMamba fusion module and SSM blocks."""
+    # 2D Image Fusion Architecture settings
+    in_channels: int = 1    # Grayscale infrared/visible channels
+    base_channels: int = 32 # Base feature channels (8.47M parameter configuration)
+    out_channels: int = 1   # Fused output channels
+    # 1D Token Fusion Module settings (PPO / RL state fusion)
     d_model: int = 128      # Hidden dimension of Mamba block
     d_state: int = 16       # State dimension (SSM parameters)
     d_conv: int = 4         # Convolution kernel size in Mamba block
@@ -57,8 +63,12 @@ class TrainingConfig:
     checkpoint_dir: str = "results/checkpoints"
     save_interval: int = 10                 # Save model every N training iterations
     eval_interval: int = 5                  # Evaluate model every N training iterations
-    device: str = "cuda"                    # "cuda" or "cpu"
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"  # Auto-selects CUDA if available
     checkpoint_path: str = None
+    dataset_dir: str = None                 # Optional custom dataset path (e.g., Kaggle /kaggle/input/...)
+    epochs: int = 5                         # Supervised training epochs
+    batch_size: int = 64                    # Batch size for supervised DataLoader
+    lr: float = 1e-4                        # Learning rate for FusionMamba optimizer
 
 
 @dataclass

@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from state_encoder import MultiModalEncoder
-from FusionMamba import FusionMamba
+from FusionMamba.fusion_module import FusionMamba
 from PPO_agent import ActorCritic
 from .metrics import compute_tracking_rmse, compute_control_effort
 
@@ -46,12 +46,17 @@ class Evaluator:
         Simulates loading weights from checkpoint.
         """
         print(f"Loading model checkpoint from {self.checkpoint_path}...")
-        # Since this is a template workspace, we catch errors if file does not exist
         try:
             checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
-            self.encoder.load_state_dict(checkpoint['encoder'])
-            self.fusion_mamba.load_state_dict(checkpoint['fusion_mamba'])
-            self.actor_critic.load_state_dict(checkpoint['actor_critic'])
+            if isinstance(checkpoint, dict):
+                if 'encoder' in checkpoint:
+                    self.encoder.load_state_dict(checkpoint['encoder'])
+                if 'fusion_mamba' in checkpoint:
+                    self.fusion_mamba.load_state_dict(checkpoint['fusion_mamba'])
+                elif 'model_state_dict' in checkpoint:
+                    print("Note: Checkpoint contains 'model_state_dict' (2D FusionMamba image fusion weights).")
+                if 'actor_critic' in checkpoint:
+                    self.actor_critic.load_state_dict(checkpoint['actor_critic'])
             print("Checkpoint loaded successfully!")
         except Exception as e:
             print(f"Skipping loading weights: {e} (Using initialized weights for simulation)")

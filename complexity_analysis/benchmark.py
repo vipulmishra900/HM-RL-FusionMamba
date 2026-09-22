@@ -1,7 +1,8 @@
 import time
 import torch
 from state_encoder import MultiModalEncoder
-from FusionMamba import FusionMamba
+from FusionMamba.fusion_module import FusionMamba as TokenFusionMamba
+from FusionMamba.fusionmamba import FusionMamba as ImageFusionMamba
 from PPO_agent import ActorCritic
 
 def count_parameters(model):
@@ -26,7 +27,7 @@ def run_complexity_benchmark(config):
         embed_dim=config.encoder.embed_dim
     ).to(device)
     
-    fusion_mamba = FusionMamba(
+    fusion_mamba = TokenFusionMamba(
         d_model=config.mamba.d_model,
         d_state=config.mamba.d_state,
         d_conv=config.mamba.d_conv,
@@ -35,6 +36,15 @@ def run_complexity_benchmark(config):
         dropout=config.mamba.dropout
     ).to(device)
     
+    in_channels = getattr(config.mamba, 'in_channels', 1)
+    base_channels = getattr(config.mamba, 'base_channels', 32)
+    out_channels = getattr(config.mamba, 'out_channels', 1)
+    image_fusion_model = ImageFusionMamba(
+        in_channels=in_channels,
+        base_channels=base_channels,
+        out_channels=out_channels
+    ).to(device)
+
     actor_critic = ActorCritic(
         state_dim=config.mamba.d_model,
         action_dim=config.agent.action_dim,
@@ -44,17 +54,19 @@ def run_complexity_benchmark(config):
     
     # 2. Count parameters
     encoder_params = count_parameters(encoder)
-    mamba_params = count_parameters(fusion_mamba)
+    mamba_token_params = count_parameters(fusion_mamba)
+    image_fusion_params = count_parameters(image_fusion_model)
     ac_params = count_parameters(actor_critic)
-    total_params = encoder_params + mamba_params + ac_params
+    rl_framework_params = encoder_params + mamba_token_params + ac_params
     
-    print("-" * 50)
+    print("-" * 55)
     print("Parameter Complexity Analysis:")
-    print(f"  - MultiModalEncoder:  {encoder_params:,} parameters")
-    print(f"  - FusionMamba Model:  {mamba_params:,} parameters")
-    print(f"  - ActorCritic Policy: {ac_params:,} parameters")
-    print(f"  - Total Framework:    {total_params:,} parameters")
-    print("-" * 50)
+    print(f"  - 2D FusionMamba Image Model: {image_fusion_params:,} parameters")
+    print(f"  - MultiModalEncoder:          {encoder_params:,} parameters")
+    print(f"  - Token FusionMamba Module:   {mamba_token_params:,} parameters")
+    print(f"  - ActorCritic Policy:         {ac_params:,} parameters")
+    print(f"  - RL Framework Total:         {rl_framework_params:,} parameters")
+    print("-" * 55)
     
     # 3. Compute FLOPs using thop if installed
     dummy_vis = torch.randn(1, *config.encoder.visual_input_shape, device=device)

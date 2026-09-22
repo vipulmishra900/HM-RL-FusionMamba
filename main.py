@@ -66,6 +66,11 @@ def parse_args():
         default=None, 
         help="Maximum training iterations before stopping (default: None for full training)"
     )
+    parser.add_argument(
+        "--no-resume", 
+        action="store_true", 
+        help="Do not auto-resume from latest checkpoint; start training from scratch"
+    )
     
     return parser.parse_args()
 
@@ -213,6 +218,8 @@ def main():
         config.training.lr = args.lr
     if args.max_iterations is not None:
         config.training.max_iterations = args.max_iterations
+    if args.no_resume:
+        config.training.auto_resume = False
         
     # Check device availability
     if config.training.device == "cuda" and not torch.cuda.is_available():

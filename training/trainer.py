@@ -148,7 +148,7 @@ class Trainer:
         self.best_val_loss = float("inf")
 
         # ---------------------------------------------------------
-        # 9. Load Checkpoint
+        # 9. Load Checkpoint (Auto-resume latest checkpoint if exists)
         # ---------------------------------------------------------
         checkpoint_path = getattr(
             config.training,
@@ -156,8 +156,19 @@ class Trainer:
             None
         )
 
+        auto_resume = getattr(config.training, "auto_resume", True)
+        latest_checkpoint_file = os.path.join(
+            config.training.checkpoint_dir,
+            "latest_checkpoint.pth"
+        )
+
         if checkpoint_path:
             self.load_checkpoint(checkpoint_path)
+        elif auto_resume and os.path.exists(latest_checkpoint_file):
+            print(
+                f"\nAuto-resume: Found latest checkpoint at '{latest_checkpoint_file}'. Resuming..."
+            )
+            self.load_checkpoint(latest_checkpoint_file)
 
     # =============================================================
     # SSIM LOSS
@@ -262,6 +273,7 @@ class Trainer:
             "epoch": epoch,
             "iteration": iteration,
             "global_step": self.global_step,
+            "global_iteration": self.global_step,
 
             "model_state_dict":
                 self.fusion_mamba.state_dict(),
@@ -318,18 +330,26 @@ class Trainer:
         # New checkpoint format
         # ---------------------------------------------------------
 
+        has_global_iter = (
+            "global_iteration" in checkpoint
+            or "global_step" in checkpoint
+        )
+
         if (
-            "global_step" in checkpoint
+            has_global_iter
             and "iteration" in checkpoint
         ):
 
-            self.global_step = checkpoint["global_step"]
+            self.global_step = checkpoint.get(
+                "global_iteration",
+                checkpoint.get("global_step", 0)
+            )
 
             saved_epoch = checkpoint["epoch"]
             saved_iteration = checkpoint["iteration"]
 
             # If entire epoch was completed
-            if saved_iteration >= len(self.dataloader):
+            if len(self.dataloader) > 0 and saved_iteration >= len(self.dataloader):
 
                 self.start_epoch = saved_epoch + 1
                 self.start_iteration = 1
@@ -352,7 +372,7 @@ class Trainer:
             )
 
             print(
-                f"Global Step       : {self.global_step}"
+                f"Global Iteration  : {self.global_step}"
             )
 
             print(
@@ -495,6 +515,14 @@ class Trainer:
             "epochs",
             5
         )
+
+        if self.start_epoch > total_epochs:
+            print(
+                f"\nTraining already completed all {total_epochs} epochs "
+                f"(current start epoch is {self.start_epoch}). "
+                f"Increase --epochs to train further, or use --no-resume to start fresh."
+            )
+            return
 
         # Number of NEW iterations to perform THIS RUN
         max_iterations = getattr(
@@ -655,7 +683,7 @@ class Trainer:
                     )
 
                     print(
-                        f"Global Step: {self.global_step}"
+                        f"Global Iteration: {self.global_step}"
                     )
 
                     print(

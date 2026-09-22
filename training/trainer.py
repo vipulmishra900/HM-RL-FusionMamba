@@ -216,6 +216,8 @@ class Trainer:
         self.fusion_mamba.train()
         
         total_epochs = getattr(self.config.training, 'epochs', 5)
+        max_iterations = getattr(self.config.training, 'max_iterations', None)
+        global_step = 0
         
         for epoch in range(self.start_epoch, total_epochs + 1):
             total_train_loss = 0.0
@@ -242,9 +244,17 @@ class Trainer:
                 self.optimizer.step()
                 
                 total_train_loss += loss.item()
+                global_step += 1
                 
                 # Print epoch, iteration, and loss
                 print(f"Epoch: {epoch} | Iteration: {iteration}/{len(self.dataloader)} | Loss: {loss.item():.6f}")
+                
+                if max_iterations is not None and global_step >= max_iterations:
+                    print(f"Reached max iterations limit ({max_iterations}). Stopping training.")
+                    break
+            
+            if max_iterations is not None and global_step >= max_iterations:
+                break
             
             avg_train_loss = total_train_loss / len(self.dataloader)
             print(f"Epoch {epoch} Training Completed. Average Train Loss: {avg_train_loss:.6f}")

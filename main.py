@@ -60,6 +60,12 @@ def parse_args():
         default=None, 
         help="Learning rate for FusionMamba optimizer"
     )
+    parser.add_argument(
+        "--max-iterations", 
+        type=int, 
+        default=None, 
+        help="Maximum training iterations before stopping (default: None for full training)"
+    )
     
     return parser.parse_args()
 
@@ -205,6 +211,8 @@ def main():
         config.training.batch_size = args.batch_size
     if args.lr is not None:
         config.training.lr = args.lr
+    if args.max_iterations is not None:
+        config.training.max_iterations = args.max_iterations
         
     # Check device availability
     if config.training.device == "cuda" and not torch.cuda.is_available():

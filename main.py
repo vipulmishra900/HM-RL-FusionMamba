@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 import torch
 
@@ -22,6 +23,12 @@ def parse_args():
         type=str, 
         default=None, 
         help="Path to model checkpoint (required for 'eval' mode)"
+    )
+    parser.add_argument(
+        "--checkpoint-dir", 
+        type=str, 
+        default=None, 
+        help="Directory to save and load checkpoints (default: results/checkpoints or $CHECKPOINT_DIR)"
     )
     parser.add_argument(
         "--device", 
@@ -218,6 +225,9 @@ def main():
         config.training.lr = args.lr
     if args.max_iterations is not None:
         config.training.max_iterations = args.max_iterations
+    if args.checkpoint_dir is not None:
+        config.training.checkpoint_dir = args.checkpoint_dir
+        os.makedirs(config.training.checkpoint_dir, exist_ok=True)
     if args.no_resume:
         config.training.auto_resume = False
         
@@ -229,6 +239,7 @@ def main():
     print("=" * 60)
     print(f"HM-RL-FusionMamba Framework running in mode: {args.mode.upper()}")
     print(f"Device: {config.training.device.upper()}")
+    print(f"Checkpoint Directory: {config.training.checkpoint_dir}")
     print("=" * 60)
     
     if args.mode == "train":
@@ -239,8 +250,13 @@ def main():
         
     elif args.mode == "eval":
         if args.checkpoint is None:
-            print("ERROR: --checkpoint must be provided in 'eval' mode.", file=sys.stderr)
-            sys.exit(1)
+            default_ckpt = os.path.join(config.training.checkpoint_dir, "latest_checkpoint.pth")
+            if os.path.exists(default_ckpt):
+                print(f"No --checkpoint specified, using latest checkpoint from '{default_ckpt}'")
+                args.checkpoint = default_ckpt
+            else:
+                print("ERROR: --checkpoint must be provided in 'eval' mode.", file=sys.stderr)
+                sys.exit(1)
         evaluator = Evaluator(config, checkpoint_path=args.checkpoint)
         evaluator.evaluate()
         

@@ -60,7 +60,7 @@ class TrainingConfig:
     num_steps: int = 2048                  # Steps collected per environment per iteration
     seed: int = 42
     log_dir: str = "results/logs"
-    checkpoint_dir: str = "results/checkpoints"
+    checkpoint_dir: str = os.environ.get("CHECKPOINT_DIR", "results/checkpoints")
     save_interval: int = 10                 # Save model every N training iterations
     eval_interval: int = 5                  # Evaluate model every N training iterations
     device: str = "cuda" if torch.cuda.is_available() else "cpu"  # Auto-selects CUDA if available
